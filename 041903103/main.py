@@ -87,7 +87,7 @@ class Word:
 
 def doConvert(filePath):
     '''
-    :param fileName: 敏感词模板的文件路径
+    :param filePath: 敏感词模板的文件路径
     :return: 包含所有敏感词的Word实例对象的列表
     '''
     chai = initChai()  # 初始化拆字对象
@@ -120,7 +120,11 @@ def createRe(words):
             for i in range(length):
                 if i != 0:                                                  #不是第一个中文
                     f_re += "[^\\u4e00-\\u9fa5]*"
-                f_re += "(?:{}|{}{}|{}|{})".format(word.content[i],
+                if len(word.content[i]) == len(word.chaifen[i]):            #不可拆的字
+                    f_re += "(?:{}|{}|{})".format(word.content[i],
+                                                       word.pinyin[i], word.pinyin[i][0])
+                else:                                                       #能拆两半的字
+                    f_re += "(?:{}|{}{}|{}|{})".format(word.content[i],
                                                    word.chaifen[i][0],word.chaifen[i][1],
                                                    word.pinyin[i], word.pinyin[i][0])
         Re_dict[word] = f_re
@@ -128,78 +132,140 @@ def createRe(words):
 
 
 def check_and_output(checkPath, ansPath, Re_dict):
+    #3.输出格式和输出到文件中
     '''
     :param checkPath: 待检测文件的路径
     :param ansPath: 输出文件的路径
     :param Re_dict: 包含敏感词的实例对象以及对应正则表达式的字典
     :return: 无
     '''
-    keyWord = []                                    #获取敏感词
-    compiledRe = []                                 #获取敏感词对应的正则
+    keyWord = []                                        # 获取敏感词
+    compiledRe = []                                     # 获取敏感词对应的正则
     for key,regex in Re_dict.items():
         keyWord.append(key.content)
-        compiledRe.append(re.compile(regex, re.I)) #创建re对象
+        compiledRe.append(re.compile(regex, re.I))      # 创建re对象
 
-    cnt_line = 1                                    #标记到哪一行了
-    total = 0
+    total = 0                                           # 记录总共有多少个敏感词
+    cnt_line = 1                                        # 标记到哪一行了
 
     with open(checkPath, 'r', encoding='utf-8') as f:
         content = f.readline()
         while content:
-            content = content.strip()  # 过滤空白字符
-            content_cp = ''.join(content)  # 拷贝一份原串
+            content = content.strip()                   # 过滤空白字符
+            if not content:                             # 过滤完空白字符后，这行为空
+                cnt_line += 1
+                content = f.readline()
+                continue
 
-            new_content,subInfo = subWord(content_cp, Re_dict) #进行同音替换，subInfo暂时用不到
-            for i in range(len(keyWord)): #key为敏感词Word实例对象，regex为对应正则表达式
-                foundInfo = compiledRe[i].finditer(new_content)   #貌似不用判断是否为空
-                for one in foundInfo:
-                    index_range = one.span()
-                    start_index = index_range[0]
-                    end_index = index_range[1]
-                    print('Line{}: <{}> {}'.format(cnt_line, keyWord[i] , content[start_index:end_index] ))
-                    total += 1
+            #content_cp = ''.join(content)  # 拷贝一份原串
+            Info = []                                   # 记录敏感词信息的列表，列表元素为字典，字典的键为敏感词，值为敏感词的范围，左闭右开[左闭,右开)
 
+            #进行第一遍筛选原始字符串
+            tempTotal, tempInfo = runRe(keyWord, compiledRe, content)       # 进行正则匹配
+            total += tempTotal
+            Info.extend(tempInfo)
+            if Info:
+                Info = sorted(Info, key=lambda x: list(x.values())[0][0])   # 对第一遍筛选的结果进行排序，以便后续按原始本文内容顺序输出
+
+            # 进行第二遍筛选可能存在同音字的内容
+            lenFirst = len(Info)
+            startIndex = 0
+            for i in range(lenFirst+1):
+                if i == lenFirst:                                           # 有两种情况会到这，第一种是第一遍没有匹配到任何东西，第二种是对这行文本末尾的扫尾匹配
+                    endIndex = len(content)                                 # 终止点为本行末
+                    partContent = content[startIndex:endIndex]              # 切片左闭右开
+                    if not partContent:                                     # 空串
+                        continue
+                    subContent, subInfo = subWord(partContent, Re_dict)     # 进行同音替换，subInfo暂时用不到
+                    tempTotal, tempInfo = runRe(keyWord, compiledRe, subContent, start = startIndex)    # 加上startIndex，以便还原成原字符串中的下标
+                    total += tempTotal
+                    Info.extend(tempInfo)
+                    continue
+
+                indexRange = list(Info[i].values())[0]                      # 获取下标范围
+                endIndex = indexRange[0]
+                partContent = content[startIndex:endIndex]                  # 切片左闭右开
+                if not partContent :                                        # 空串
+                    startIndex = indexRange[1]                              # 下一次匹配开始的起始点就是这一次的末尾点
+                    continue
+                subContent, subInfo = subWord(partContent, Re_dict)         # 进行同音替换，subInfo暂时用不到
+                tempTotal, tempInfo= runRe(keyWord, compiledRe, subContent, start = startIndex)
+                total += tempTotal
+                Info.extend(tempInfo)
+                startIndex = indexRange[1]                                  # 下一次匹配开始的起始点就是这一次的末尾点
+
+            # 对本行匹配到所有内容进行输出
+            for i in range(len(Info)):
+                indexRange = list(Info[i].values())[0]
+                startIndex = indexRange[0]
+                endIndex = indexRange[1]
+                print('Line{}: <{}> {}'.format(cnt_line, list(Info[i].keys())[0], content[startIndex:endIndex]))
 
             cnt_line += 1
             content = f.readline()
 
-    print('total',total)
-    pass
+    print('total', total)
+
+
+def runRe(keyWord, compiledRe, content, start = 0):
+    '''
+    :param keyWord: 敏感词（列表）
+    :param compiledRe: 根据敏感词生成的正则对象（列表）
+    :param content: 进行匹配的文本内容
+    :param start: 下标
+    :return: 匹配到的个数；敏感词信息的列表，列表元素为字典，字典的键为敏感词，值为敏感词的范围，左闭右开[左闭,右开)
+    '''
+    total = 0
+    info = []
+    for i in range(len(keyWord)):  # key为敏感词Word实例对象，regex为对应正则表达式
+        word = keyWord[i]
+        foundInfo = compiledRe[i].finditer(content)
+        for one in foundInfo:
+            span = list(one.span())
+            span[0] += start
+            span[1] += start
+            tempDict = {}
+            tempDict[word] = span
+
+            info.append(tempDict)
+            total += 1
+    return total, info
 
 
 def subWord(content, Re_dict):
     '''
     :param content: 一行文本内容
     :param Re_dict: 包含敏感词的实例对象以及对应正则表达式的字典
-    :return: 同音替换后的文本内容，替换字的信息
+    :return: 同音替换后的文本内容，替换字的信息（暂时用不到）
     '''
-    allSubInfo = []         #记录这一行所有同音替换字的信息
+    allSubInfo = []                                                 #记录这一行所有同音替换字的信息
 
     for i in range(len(content)):
-        cur_word = content[i]   # 获取当前这个字
-        curpy = lpy(cur_word)[0]  # 得到当前这个字的拼音
-        for key in Re_dict.keys():  # 获取敏感词对象
-            if curpy in key.pinyin: # 判断 该字的拼音 是否在 某个敏感词对象的拼音列表里
-                key_word = key.content[ key.pinyin.index(curpy) ] #如果在，则获取对应的敏感字
+        cur_word = content[i]                                       # 获取当前这个字
+        curpy = lpy(cur_word)[0]                                    # 得到当前这个字的拼音，lpy返回的是列表，因此加[0]让其返回列表里的元素——字符串
 
-                cur_index = i   #当前这个字在这一行的下标
-                curInfo = [cur_word, cur_index]
-                allSubInfo.append(curInfo)
+        for key in Re_dict.keys():                                  # 获取敏感词对象
+            if curpy in key.pinyin:                                 # 判断 该字的拼音 是否在 某个敏感词对象的拼音列表里
+                key_word = key.content[ key.pinyin.index(curpy) ]   #如果在，则获取对应的敏感字
 
-                content = content[:i] + key_word + content[i+1:]
+                #cur_index = i                                       #当前这个字在这一行的下标
+                #curInfo = [cur_word, cur_index]
+                #allSubInfo.append(curInfo)                          #记录替换信息
 
-
-                break               #找到了就不去下一个敏感词里查找了
+                content = content[:i] + key_word + content[i+1:]    #进行替换同音字，把同音字换成敏感词中的字
+                break                                               #找到了就不去下一个敏感词里查找了
     return content, allSubInfo
 
 
 if __name__ == '__main__':
     st = datetime.datetime.now()
+
     # forbiddenFile = sys.argv[1]
     # checkFile = sys.argv[2]
     # ansFile = sys.argv[3]
     forbiddenFile = "C:/Users/96356/Desktop/SE/p1_test/words.txt"
     checkFile = "C:/Users/96356/Desktop/SE/p1_test/org.txt"
+    #checkFile = "C:/Users/96356/Desktop/org.txt"
     ansFile = "C:/Users/96356/Desktop/SE/p1_test/test_ans.txt"
 
     forbiddenWords = doConvert(forbiddenFile)
@@ -209,6 +275,6 @@ if __name__ == '__main__':
     check_and_output(checkFile, ansFile, Re_dict)
 
     et = datetime.datetime.now()
-    #print ((et - st).seconds)
+    print ((et - st))
 
 
