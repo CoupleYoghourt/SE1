@@ -200,6 +200,8 @@ def check_and_output(checkPath, ansPath, Re_dict):
                 startIndex = indexRange[1]                                  # 下一次匹配开始的起始点就是这一次的末尾点
 
             # 对本行匹配到所有内容进行输出
+            if Info:
+                Info = sorted(Info, key=lambda x: list(x.values())[0][0])
             for i in range(len(Info)):
                 indexRange = list(Info[i].values())[0]
                 startIndex = indexRange[0]
@@ -270,15 +272,15 @@ if __name__ == '__main__':
 
     forbiddenFile = checkFile = ansFile = ""
     if len(sys.argv) == 1:
-        forbiddenFile = "C:/Users/96356/Desktop/SE/p1_test/words.txt"
-        checkFile = "C:/Users/96356/Desktop/SE/p1_test/org.txt"
-        ansFile = "C:/Users/96356/Desktop/SE/p1_test/ans.txt"
+        forbiddenFile = "words.txt"
+        checkFile = "org.txt"
+        ansFile = "ans.txt"
     elif len(sys.argv) == 4:
         forbiddenFile = sys.argv[1]
         checkFile = sys.argv[2]
         ansFile = sys.argv[3]
     else:
-        print("输入有误，请重新输入")
+        print("输入不符合规范，请重新输入")
         exit(-1)
 
     forbiddenWords = doConvert(forbiddenFile)                       # 将敏感词转为敏感词对象
