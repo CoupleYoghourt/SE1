@@ -1,6 +1,5 @@
 import re
 import sys
-import datetime
 from pychai import Schema
 from pypinyin import lazy_pinyin as lpy
 
@@ -93,12 +92,15 @@ def doConvert(filePath):
     chai = initChai()  # 初始化拆字对象
     forbiddenWords = []
     with open(filePath, 'r', encoding='utf-8') as f:
-        while True:
-            content = f.readline().strip()  # 过滤空白字符
+        content = f.readline()
+        while content:
+            content = content.strip()  # 过滤空白字符
             if not content:
-                break
+                content = f.readline()
+                continue
             word = Word(content, chai)
             forbiddenWords.append(word)
+            content = f.readline()
     return forbiddenWords
 
 
@@ -139,6 +141,8 @@ def check_and_output(checkPath, ansPath, Re_dict):
     :param Re_dict: 包含敏感词的实例对象以及对应正则表达式的字典
     :return: 无
     '''
+    ans = []
+
     keyWord = []                                        # 获取敏感词
     compiledRe = []                                     # 获取敏感词对应的正则
     for key,regex in Re_dict.items():
@@ -148,6 +152,7 @@ def check_and_output(checkPath, ansPath, Re_dict):
     total = 0                                           # 记录总共有多少个敏感词
     cnt_line = 1                                        # 标记到哪一行了
 
+    #处理文本内容
     with open(checkPath, 'r', encoding='utf-8') as f:
         content = f.readline()
         while content:
@@ -199,13 +204,17 @@ def check_and_output(checkPath, ansPath, Re_dict):
                 indexRange = list(Info[i].values())[0]
                 startIndex = indexRange[0]
                 endIndex = indexRange[1]
-                print('Line{}: <{}> {}'.format(cnt_line, list(Info[i].keys())[0], content[startIndex:endIndex]))
+                ans.append('Line{}: <{}> {}'.format(cnt_line, list(Info[i].keys())[0], content[startIndex:endIndex]))
 
             cnt_line += 1
             content = f.readline()
 
-    print('total', total)
-
+    #输出文本内容
+    with open(ansPath, "w", encoding="utf-8") as f:
+        f.write("Total: {}\n".format(total))
+        for i in range(len(ans)-1):
+            f.write(ans[i]+'\n')
+        f.write(ans[-1])
 
 def runRe(keyWord, compiledRe, content, start = 0):
     '''
@@ -246,35 +255,34 @@ def subWord(content, Re_dict):
 
         for key in Re_dict.keys():                                  # 获取敏感词对象
             if curpy in key.pinyin:                                 # 判断 该字的拼音 是否在 某个敏感词对象的拼音列表里
-                key_word = key.content[ key.pinyin.index(curpy) ]   #如果在，则获取对应的敏感字
+                key_word = key.content[ key.pinyin.index(curpy) ]   # 如果在，则获取对应的敏感字
 
-                #cur_index = i                                       #当前这个字在这一行的下标
+                #cur_index = i                                       # 当前这个字在这一行的下标
                 #curInfo = [cur_word, cur_index]
-                #allSubInfo.append(curInfo)                          #记录替换信息
+                #allSubInfo.append(curInfo)                          # 记录替换信息
 
-                content = content[:i] + key_word + content[i+1:]    #进行替换同音字，把同音字换成敏感词中的字
-                break                                               #找到了就不去下一个敏感词里查找了
+                content = content[:i] + key_word + content[i+1:]    # 进行替换同音字，把同音字换成敏感词中的字
+                break                                               # 找到了就不去下一个敏感词里查找了
     return content, allSubInfo
 
 
 if __name__ == '__main__':
-    st = datetime.datetime.now()
 
-    # forbiddenFile = sys.argv[1]
-    # checkFile = sys.argv[2]
-    # ansFile = sys.argv[3]
-    forbiddenFile = "C:/Users/96356/Desktop/SE/p1_test/words.txt"
-    checkFile = "C:/Users/96356/Desktop/SE/p1_test/org.txt"
-    #checkFile = "C:/Users/96356/Desktop/org.txt"
-    ansFile = "C:/Users/96356/Desktop/SE/p1_test/test_ans.txt"
+    forbiddenFile = checkFile = ansFile = ""
+    if len(sys.argv) == 1:
+        forbiddenFile = "C:/Users/96356/Desktop/SE/p1_test/words.txt"
+        checkFile = "C:/Users/96356/Desktop/SE/p1_test/org.txt"
+        ansFile = "C:/Users/96356/Desktop/SE/p1_test/ans.txt"
+    elif len(sys.argv) == 4:
+        forbiddenFile = sys.argv[1]
+        checkFile = sys.argv[2]
+        ansFile = sys.argv[3]
+    else:
+        print("输入有误，请重新输入")
+        exit(-1)
 
-    forbiddenWords = doConvert(forbiddenFile)
-    Re_dict = createRe(forbiddenWords)
-    #print(Re_dict)
-
-    check_and_output(checkFile, ansFile, Re_dict)
-
-    et = datetime.datetime.now()
-    print ((et - st))
+    forbiddenWords = doConvert(forbiddenFile)                       # 将敏感词转为敏感词对象
+    Re_dict = createRe(forbiddenWords)                              # 创建对应正则表达式
+    check_and_output(checkFile, ansFile, Re_dict)                   # 进行匹配和输出
 
 

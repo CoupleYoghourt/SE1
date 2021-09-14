@@ -1,0 +1,3 @@
+pychai==1.0.1
+pypinyin==0.42.0
+PyYAML==5.4.1
