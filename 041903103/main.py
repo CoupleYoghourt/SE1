@@ -94,6 +94,8 @@ def doConvert(filePath):
     '''
     chai = initChai()  # 初始化拆字对象
     forbiddenWords = []
+
+    TryOpen(filePath)
     with open(filePath, 'r', encoding='utf-8') as f:
         content = f.readline()
         while content:
@@ -156,6 +158,7 @@ def check_and_output(checkPath, ansPath, Re_dict):
     cnt_line = 1                                        # 标记到哪一行了
 
     #处理文本内容
+    TryOpen(checkPath)
     with open(checkPath, 'r', encoding='utf-8') as f:
         content = f.readline()
         while content:
@@ -277,26 +280,32 @@ def subWord(content, Re_dict):
     return content, allSubInfo
 
 
+def TryOpen(filePath):
+    try:
+        with open(filePath, 'r', encoding='utf-8') as f:
+            pass
+    except Exception as msg:
+        print(msg)
+        exit(0)
+
+
 if __name__ == '__main__':
 
     forbiddenFile = checkFile = ansFile = ""
-    if len(sys.argv) == 1:
+    if len(sys.argv) == 1:                                          # 未输入任何参数时，采用默认的配置
         forbiddenFile = "words.txt"
         checkFile = "org.txt"
         ansFile = "ans.txt"
-    elif len(sys.argv) == 4:
+    elif len(sys.argv) == 4:                                        # 正确输入三个参数
         forbiddenFile = sys.argv[1]
         checkFile = sys.argv[2]
         ansFile = sys.argv[3]
-    else:
+    else:                                                           # 输入的参数少于3个或者多于3个
         print("输入不符合规范，请重新输入")
-        exit(-1)
+        exit(0)
 
     forbiddenWords = doConvert(forbiddenFile)                       # 将敏感词转为敏感词对象
-    for i in range(len(forbiddenWords)):
-        print(forbiddenWords[i])
-
     Re_dict = createRe(forbiddenWords)                              # 创建对应正则表达式
-    ans = check_and_output(checkFile, ansFile, Re_dict)                   # 进行匹配和输出
+    ans = check_and_output(checkFile, ansFile, Re_dict)             # 进行匹配和输出
 
 
