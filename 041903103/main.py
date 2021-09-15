@@ -67,9 +67,12 @@ def doChai(words, chai):
     for _, word in enumerate(words):
         if word in chai.tree.keys():
             zi = chai.tree[word]
-            chaifen.append([zi.first.name[0], zi.second.name[0]])
+            if zi.first.name and zi.second.name:
+                chaifen.append([zi.first.name[0], zi.second.name[0]])
+            else:
+                chaifen.append([word])
         else:
-            chaifen.append(word)
+            chaifen.append([word])
     return chaifen
 
 
@@ -122,7 +125,7 @@ def createRe(words):
             for i in range(length):
                 if i != 0:                                                  #不是第一个中文
                     f_re += "[^\\u4e00-\\u9fa5]*"
-                if len(word.content[i]) == len(word.chaifen[i]):            #不可拆的字
+                if len(word.chaifen[i]) == 1:                               #不可拆的字
                     f_re += "(?:{}|{}|{})".format(word.content[i],
                                                        word.pinyin[i], word.pinyin[i][0])
                 else:                                                       #能拆两半的字
@@ -206,7 +209,7 @@ def check_and_output(checkPath, ansPath, Re_dict):
                 indexRange = list(Info[i].values())[0]
                 startIndex = indexRange[0]
                 endIndex = indexRange[1]
-                ans.append('Line{}: <{}> {}'.format(cnt_line, list(Info[i].keys())[0], content[startIndex:endIndex]))
+                ans.append('Line{}: <{}> {}\n'.format(cnt_line, list(Info[i].keys())[0], content[startIndex:endIndex]))
 
             cnt_line += 1
             content = f.readline()
@@ -215,8 +218,11 @@ def check_and_output(checkPath, ansPath, Re_dict):
     with open(ansPath, "w", encoding="utf-8") as f:
         f.write("Total: {}\n".format(total))
         for i in range(len(ans)-1):
-            f.write(ans[i]+'\n')
-        f.write(ans[-1])
+            f.write(ans[i])
+        f.write(ans[-1].rstrip())
+
+    return ans
+
 
 def runRe(keyWord, compiledRe, content, start = 0):
     '''
@@ -253,18 +259,21 @@ def subWord(content, Re_dict):
 
     for i in range(len(content)):
         cur_word = content[i]                                       # 获取当前这个字
-        curpy = lpy(cur_word)[0]                                    # 得到当前这个字的拼音，lpy返回的是列表，因此加[0]让其返回列表里的元素——字符串
+        for curpy in lpy(cur_word):                                 # 得到当前这个字的拼音，lpy返回的是列表，里面元素是字符串
+            flag = False
+            for key in Re_dict.keys():                                  # 获取敏感词对象
+                if curpy in key.pinyin:                                 # 判断 该字的拼音 是否在 某个敏感词对象的拼音列表里
+                    flag = True
+                    key_word = key.content[ key.pinyin.index(curpy) ]   # 如果在，则获取对应的敏感字
 
-        for key in Re_dict.keys():                                  # 获取敏感词对象
-            if curpy in key.pinyin:                                 # 判断 该字的拼音 是否在 某个敏感词对象的拼音列表里
-                key_word = key.content[ key.pinyin.index(curpy) ]   # 如果在，则获取对应的敏感字
+                    #cur_index = i                                       # 当前这个字在这一行的下标
+                    #curInfo = [cur_word, cur_index]
+                    #allSubInfo.append(curInfo)                          # 记录替换信息
 
-                #cur_index = i                                       # 当前这个字在这一行的下标
-                #curInfo = [cur_word, cur_index]
-                #allSubInfo.append(curInfo)                          # 记录替换信息
-
-                content = content[:i] + key_word + content[i+1:]    # 进行替换同音字，把同音字换成敏感词中的字
-                break                                               # 找到了就不去下一个敏感词里查找了
+                    content = content[:i] + key_word + content[i+1:]    # 进行替换同音字，把同音字换成敏感词中的字
+                    break                                               # 找到了就不去下一个敏感词里查找了
+            if flag:
+                break
     return content, allSubInfo
 
 
@@ -284,7 +293,10 @@ if __name__ == '__main__':
         exit(-1)
 
     forbiddenWords = doConvert(forbiddenFile)                       # 将敏感词转为敏感词对象
+    for i in range(len(forbiddenWords)):
+        print(forbiddenWords[i])
+
     Re_dict = createRe(forbiddenWords)                              # 创建对应正则表达式
-    check_and_output(checkFile, ansFile, Re_dict)                   # 进行匹配和输出
+    ans = check_and_output(checkFile, ansFile, Re_dict)                   # 进行匹配和输出
 
 
